@@ -1,36 +1,85 @@
-from unet import seg_model
-from config import *
+import os
+import argparse
+import logging
+import numpy as np
+import pandas as pd
+from PIL import Image
 import matplotlib.pyplot as plt
-import numpy as np  # linear algebra
+from training import raw_prediction, smooth, build_model, masks_as_color, multi_rle_encode, DiceLoss, dice_coef, \
+    scale_to_tuple, masks_as_color
 from skimage.io import imread
+from keras.optimizers import Adam
+from constans import get_args
+
+WEIGHTS_PATH = './seg_model_weights.best1.hdf5'
+PATH = r'C:\Users\katia\OneDrive\Робочий стіл/train_v2/'
+MODEL_SHAPE = (384, 384, 3)
 
 
-# Load saved weights
-seg_model.load_weights(weight_path)
-seg_model.save('seg_model.h5')
+def pred_encode(model, img, path, **kwargs):
+    cur_seg, _ = raw_prediction(model, img, path=path)
+    cur_seg = smooth(cur_seg)
 
-# Get list of images from test directory
-test_paths = os.listdir(test_image_dir)
+    cur_rles = multi_rle_encode(cur_seg, **kwargs)
+    return [[img, rle] for rle in cur_rles if rle is not None]
 
-# Test first image from list
-c_img_name = test_paths[0]
 
-# Read image and prepare it
-c_path = os.path.join(test_image_dir, c_img_name)
-c_img = imread(c_path)
-img = np.expand_dims(c_img, 0) / 255.0
+def get_output_filenames(args):
+    def _generate_name(fn):
+        return f'{os.path.splitext(fn)[0]}_OUT.png'
 
-# Get prediction
-prediction = seg_model.predict(img)
+    return args.output or list(map(_generate_name, args.input))
 
-# Show image and it`s prediction
-fig, ax = plt.subplots(1, 2, figsize = (16, 16))
-fig.subplots_adjust(wspace=0, hspace=0)
 
-ax[0].axis('off')
-ax[0].imshow(img)
-ax[0].set_title('Image')
+def mask_to_image(mask: np.ndarray):
+    if mask.ndim == 2:
+        return Image.fromarray((mask * 255).astype(np.uint8))
+    elif mask.ndim == 3:
+        return Image.fromarray((np.argmax(mask, axis=0) * 255 / mask.shape[0]).astype(np.uint8))
 
-ax[1].axis('off')
-ax[1].imshow(prediction[0, :, :, 0], vmin = 0, vmax = 1)
-ax[1].set_title('Prediction')
+
+def plot_img_and_mask(img, mask):
+    classes = mask.shape[0] if len(mask.shape) > 2 else 1
+    fig, ax = plt.subplots(1, classes + 1)
+    ax[0].set_title('Input image')
+    ax[0].imshow(img)
+    if classes > 1:
+        for i in range(classes):
+            ax[i + 1].set_title(f'Output mask (class {i + 1})')
+            ax[i + 1].imshow(mask[i, :, :])
+    else:
+        ax[1].set_title(f'Output mask')
+        ax[1].imshow(mask)
+    plt.xticks([]), plt.yticks([])
+    plt.show()
+
+
+if __name__ == '__main__':
+    args = get_args()
+    logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+
+    in_files = args.input
+    out_files = get_output_filenames(args)
+
+    model_shape = (int(768 * args.scale), int(768 * args.scale), 3)
+    img_scaling = scale_to_tuple(args.scale)
+
+    model = build_model((1, 1), input_shape=model_shape)
+    model.load_weights(args.weights)
+    model.compile(optimizer=Adam(1e-3, decay=1e-6), loss=DiceLoss(), metrics=[dice_coef])
+
+    for i, c_img_name in enumerate(in_files):
+        logging.info(f'\nPredicting image {c_img_name} ...')
+        mask, _ = raw_prediction(model, c_img_name, path=os.getcwd(), img_scaling=img_scaling)
+        mask = masks_as_color(multi_rle_encode(mask, min_max_threshold=1.0), shape=model_shape[:2])
+
+        if not args.no_save:
+            out_filename = out_files[i]
+            result = mask_to_image(mask)
+            result.save(out_filename)
+            logging.info(f'Mask saved to {out_filename}')
+
+        if args.show:
+            img = Image.open(c_img_name)
+            logging.info(f'Visualizing results for image {c_img_name}, close to continue...')
+            plot_img_and_mask(img, mask)
