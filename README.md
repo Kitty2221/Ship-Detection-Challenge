@@ -3,39 +3,43 @@
 
 ### Airbus Ship Detection Challenge
 
-This notebook contains my solution Kaggle's [Airbus Ship Detection challenge](https://www.kaggle.com/c/airbus-ship-detection/code?competitionId=9988&sortBy=scoreDescending&language=Python). 
+This is my solution Kaggle's [Airbus Ship Detection challenge](https://www.kaggle.com/c/airbus-ship-detection/code?competitionId=9988&sortBy=scoreDescending&language=Python). 
 
 
-This task requires you to find ships in the images and place an aligned bounding box segment around the ships. 
+The goal of the competition is to analyze satellite images of container ships and produce segmentation masks of the ships.
 
+In this project, I am going to locate ships in images, and show segment mask around the ships we locate. Many images do not contain ships, and those that do may contain multiple ships. Ships within and across images may differ in size (sometimes significantly) and be located in open sea, at docks, marinas, etc.
 
-The solution includes several files:
+### DATA PREPROCESSING
+![img.png](img.png)
 
-  Exploration and analysis 
+> 🍒 Installation 🍒
+> 
+1️⃣Clone this repo
 
-	Data_analysis.ipynb
+`git clone https://github.com/Kitty2221/Ship-Detection-Challenge.git`
 
-  Config file 
-  
-	config.py
+2️⃣ Create virtual environment
 
+    python -m venv venv
 
-  Keras implementation of Unet architecture.
+3️⃣Activate it (depends on the OS)
 
-	unet.py
+`venv\Scripts\activate`
 
-  Run prediction of trained model on first image from test_2 directory.
+4️⃣ Install dependencies
 
-	inference.py
+`pip install -r requirements.txt`
 
-  Function library for decoing masks, generating images for training, etc.
+5️⃣ Load [dataset](https://www.kaggle.com/competitions/airbus-ship-detection/data)
 
-	utils.py
+6️⃣ Run  app locally
 
-  Run data preparation, augmentation and traing of model with training history graphs as output.
+🦄 That's all! Enjoy! 🦄
 
-    training.py
+### Results
 
-  Package requirements for solution
+Due to the lack of available resources, the training of the models was limited. In more details I have used just a small portion of the initial dataset. So consider using more images and further train with more epochs. This will probably improve performance as the loss functions do not converge after only 20 epochs. So this mean that there is more road to traverse. Furthermore, avoid downscaling the images as higher resolution images will lead to more precise predicted segmentation masks.
 
-	requirements.tx
+The model copes well with pictures with good contrast and where there are large obvious ships. Also when there are no shores of piers in the picture.
+On the other hand, in pictures where there are a lot of small ships, the model copes poorly.
